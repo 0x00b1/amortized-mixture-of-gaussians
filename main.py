@@ -21,12 +21,12 @@ if __name__ == "__main__":
             project="amortized-mixture-of-gaussians",
             log_model=True,
         ),
-        max_epochs=2,
+        max_epochs=512,
     )
 
     model = AmortizedMixtureOfGaussians(
         dim_output=2,
-        dim_hidden=64,
+        dim_hidden=16,
         num_heads=4,
         num_blocks=6,
         components=3,

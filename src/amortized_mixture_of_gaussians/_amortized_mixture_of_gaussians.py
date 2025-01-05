@@ -377,10 +377,10 @@ class AmortizedMixtureOfGaussians(LightningModule):
         )
 
         train_parameters = (
-            train_parameters["num_components"],
+            train_parameters["components"],
             train_parameters["means"],
-            train_parameters["logvars"],
-            train_parameters["existence"],
+            train_parameters["log_variances"],
+            train_parameters["masks"],
         )
 
         self.train_dataset = TensorDataset(*train_parameters, train_samples)
@@ -398,10 +398,10 @@ class AmortizedMixtureOfGaussians(LightningModule):
             )
 
             val_parameters = (
-                val_parameters["num_components"],
+                val_parameters["components"],
                 val_parameters["means"],
-                val_parameters["logvars"],
-                val_parameters["existence"],
+                val_parameters["log_variances"],
+                val_parameters["masks"],
             )
 
             self.val_dataset = TensorDataset(*val_parameters, val_samples)
@@ -418,10 +418,10 @@ class AmortizedMixtureOfGaussians(LightningModule):
             )
 
             test_parameters = (
-                test_parameters["num_components"],
+                test_parameters["components"],
                 test_parameters["means"],
-                test_parameters["logvars"],
-                test_parameters["existence"],
+                test_parameters["log_variances"],
+                test_parameters["masks"],
             )
 
             self.test_dataset = TensorDataset(*test_parameters, test_samples)
@@ -465,9 +465,9 @@ class AmortizedMixtureOfGaussians(LightningModule):
         num_components = int(predicted_masks.squeeze(0).sum().item())
 
         prediction = {
-            "num_components": num_components,
+            "components": num_components,
             "means": predicted_means.squeeze(0)[:num_components],
-            "logvars": predicted_log_variances.squeeze(0)[:num_components],
+            "log_variances": predicted_log_variances.squeeze(0)[:num_components],
         }
 
         gaussian_mixture = GaussianMixture(components, covariance_type="diag")
@@ -484,8 +484,8 @@ class AmortizedMixtureOfGaussians(LightningModule):
             alpha=0.3,
         )
 
-        for k in range(prediction["num_components"]):
-            standard_deviation = numpy.sqrt(numpy.exp(prediction["logvars"][k]))
+        for k in range(prediction["components"]):
+            standard_deviation = numpy.sqrt(numpy.exp(prediction["log_variances"][k]))
 
             figure.gca().add_artist(
                 Ellipse(

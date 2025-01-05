@@ -18,7 +18,7 @@ def generate_gaussian_mixture(
 
     log_variances = torch.zeros(batch_size, maximum_components, dim_output)
 
-    existences = torch.zeros(batch_size, maximum_components)
+    masks = torch.zeros(batch_size, maximum_components)
 
     for i in range(batch_size):
         k = components[i].item()
@@ -36,10 +36,8 @@ def generate_gaussian_mixture(
                 if valid:
                     current_means.append(mean)
                     means[i, j] = mean
-                    log_variances[i, j] = (
-                            torch.rand(dim_output) * (maximum_log_variance - minimum_log_variance) + minimum_log_variance
-                    )
-                    existences[i, j] = 1
+                    log_variances[i, j] = (torch.rand(dim_output) * (maximum_log_variance - minimum_log_variance) + minimum_log_variance)
+                    masks[i, j] = 1
                     break
 
     samples = []
@@ -51,10 +49,7 @@ def generate_gaussian_mixture(
         for j in range(k):
             mog_samples = [
                 *mog_samples,
-                MultivariateNormal(
-                    means[i, j],
-                    covariance_matrix=torch.diag(torch.exp(log_variances[i, j])),
-                ).sample(
+                MultivariateNormal(means[i, j], covariance_matrix=torch.diag(torch.exp(log_variances[i, j])),).sample(
                     [
                         num_samples // k,
                     ],
@@ -89,10 +84,10 @@ def generate_gaussian_mixture(
     samples = torch.stack(samples)
 
     parameters = {
-        "existence": existences,
-        "logvars": log_variances,
+        "components": components,
+        "log_variances": log_variances,
+        "masks": masks,
         "means": means,
-        "num_components": components,
     }
 
     return parameters, samples
