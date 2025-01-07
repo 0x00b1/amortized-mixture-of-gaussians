@@ -15,9 +15,9 @@ class GaussianMixtureModelDataset(Dataset):
 
     Args:
         size (int): Number of GMMs in the dataset. Default: 1000
-        n (int): Total samples drawn from each GMM. Default: 100
-        minimum_k (int): Minimum number of mixture components. Default: 1
-        maximum_k (int): Maximum number of mixture components. Default: 5
+        sample_size (int): Total samples drawn from each GMM. Default: 100
+        minimum_component (int): Minimum number of mixture components. Default: 1
+        maximum_component (int): Maximum number of mixture components. Default: 5
         dimension (int): Dimensionality of each component. Default: 2
         minimum_distance (float): Minimum distance between any two means. Default: 1.0
         minimum_log_variance (float): Minimum log variance per dimension. Default: -1.0
@@ -33,9 +33,9 @@ class GaussianMixtureModelDataset(Dataset):
     def __init__(
         self,
         size: int = 1000,
-        n: int = 100,
-        minimum_k: int = 1,
-        maximum_k: int = 5,
+        sample_size: int = 100,
+        minimum_component: int = 1,
+        maximum_component: int = 5,
         dimension: int = 2,
         minimum_distance: float = 1.0,
         minimum_log_variance: float = -1.0,
@@ -49,10 +49,14 @@ class GaussianMixtureModelDataset(Dataset):
         super().__init__()
 
         self.size = size
-        self.n = n
-        self.minimum_k = minimum_k
-        self.maximum_k = maximum_k
+
+        self.sample_size = sample_size
+
+        self.minimum_component = minimum_component
+        self.maximum_component = maximum_component
+
         self.dimension = dimension
+
         self.minimum_distance = minimum_distance
 
         self.minimum_log_variance = minimum_log_variance
@@ -65,9 +69,10 @@ class GaussianMixtureModelDataset(Dataset):
         self.use_random_weights = use_random_weights
 
         if device is None:
-            device = torch.device("cpu")
+            device = torch.get_default_device()
         elif isinstance(device, str):
             device = torch.device(device)
+
         self.device = device
 
         if seed is not None:
@@ -80,7 +85,7 @@ class GaussianMixtureModelDataset(Dataset):
             self,
             index: int,
     ) -> Tuple[Tensor, Tuple[Tensor, Tensor, Tensor, Tensor]]:
-        k = random.randint(self.minimum_k, self.maximum_k + 1)
+        k = random.randint(self.minimum_component, self.maximum_component + 1)
 
         components = Tensor(
             k,
@@ -88,23 +93,60 @@ class GaussianMixtureModelDataset(Dataset):
         )
 
         means = torch.zeros(
-            self.maximum_k,
+            self.maximum_component,
             self.dimension,
             device=self.device,
         )
 
         log_variances = torch.zeros(
-            self.maximum_k,
+            self.maximum_component,
             self.dimension,
             device=self.device,
         )
 
         masks = torch.zeros(
-            self.maximum_k,
+            self.maximum_component,
             device=self.device,
         )
 
-        self._sample_means(k, means, log_variances, masks)
+        chosen_means = []
+
+        for j in range(k):
+            for _ in range(self.max_attempts):
+                random_mean = torch.randn(
+                    self.dimension,
+                    device=self.device,
+                )
+
+                random_mean = random_mean * self.random_scale
+
+                candidate_means = []
+
+                for chosen_mean in chosen_means:
+                    candidate_mean = torch.norm(random_mean - chosen_mean)
+
+                    candidate_means = [
+                        *candidate_means,
+                        candidate_mean >= self.minimum_distance,
+                    ]
+
+                if all(candidate_means):
+                    chosen_means.append(random_mean)
+
+                    means[j] = random_mean
+
+                    log_variance = torch.rand(
+                        self.dimension,
+                        device=self.device,
+                    )
+
+                    log_variances[j] = log_variance * self.log_variance_difference + self.minimum_log_variance
+
+                    masks[j] = 1
+
+                    break
+            else:
+                raise RuntimeError
 
         if self.use_random_weights:
             distribution = Dirichlet(
@@ -114,19 +156,19 @@ class GaussianMixtureModelDataset(Dataset):
                 ),
             )
 
-            ks = torch.floor(distribution.sample() * self.n)
+            ks = torch.floor(distribution.sample() * self.sample_size)
 
-            for index in range(self.n - torch.sum(ks)):
+            for index in range(self.sample_size - torch.sum(ks)):
                 ks[index % k] = ks[index % k] + 1
         else:
             ks = torch.full(
                 [k],
-                self.n // k,
+                self.sample_size // k,
                 dtype=torch.int64,
                 device=self.device,
             )
 
-            ks[-1] = ks[-1] + self.n % k
+            ks[-1] = ks[-1] + self.sample_size % k
 
         samples = []
 
@@ -143,7 +185,10 @@ class GaussianMixtureModelDataset(Dataset):
             samples = [*samples, sample]
 
         return (
-            torch.concatenate(samples, dim=0),
+            torch.concatenate(
+                samples,
+                dim=0,
+            ),
             (
                 components,
                 means,
@@ -151,43 +196,3 @@ class GaussianMixtureModelDataset(Dataset):
                 masks,
             )
         )
-
-    def _sample_means(
-        self,
-        k: int,
-        means: Tensor,
-        log_variances: Tensor,
-        masks: Tensor,
-    ) -> None:
-        chosen_means = []
-
-        for j in range(k):
-            for _ in range(self.max_attempts):
-                candidate_mean = torch.randn(self.dimension, device=self.device)
-
-                candidate_mean = candidate_mean * self.random_scale
-
-                candidates = []
-
-                for chosen_mean in chosen_means:
-                    candidate = torch.norm(candidate_mean - chosen_mean) >= self.minimum_distance
-
-                    candidates = [*candidates, candidate]
-
-                if all(candidates):
-                    chosen_means.append(candidate_mean)
-
-                    means[j] = candidate_mean
-
-                    log_variance = torch.rand(
-                        self.dimension,
-                        device=self.device,
-                    )
-
-                    log_variances[j] = log_variance * self.log_variance_difference + self.minimum_log_variance
-
-                    masks[j] = 1
-
-                    break
-            else:
-                raise RuntimeError

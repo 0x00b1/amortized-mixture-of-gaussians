@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader, TensorDataset
 from wandb import Image
 
 from src.amortized_mixture_of_gaussians.datasets._generate_gaussian_mixture import generate_gaussian_mixture
-from .datasets import generate_test_sample
+from .datasets import generate_test_sample, GaussianMixtureModelDataset
 from .metrics.functional import (
     component_difference_score,
     mean_distance_score,
@@ -384,6 +384,18 @@ class AmortizedMixtureOfGaussians(LightningModule):
         )
 
         self.train_dataset = TensorDataset(*train_parameters, train_samples)
+
+        # self.train_dataset = GaussianMixtureModelDataset(
+        #     size=10000,
+        #     sample_size=self.hparams.num_samples,
+        #     dimension=2,
+        #     minimum_component=self.hparams.minimum_components,
+        #     maximum_component=self.hparams.maximum_components,
+        #     # dimension=self.hparams.dim_output,
+        #     minimum_distance=self.hparams.minimum_distance,
+        #     minimum_log_variance=self.hparams.minimum_log_variance,
+        #     maximum_log_variance=self.hparams.maximum_log_variance,
+        # )
 
         if not train_only:
             val_parameters, val_samples = generate_gaussian_mixture(

@@ -1,3 +1,4 @@
+from ._gaussian_mixture_model_dataset import GaussianMixtureModelDataset
 from ._generate_gaussian_mixture import generate_gaussian_mixture
 from ._generate_test_sample import (
     generate_test_sample,
@@ -7,6 +8,7 @@ from ._generate_test_sample import (
 )
 
 __all__ = [
+    "GaussianMixtureModelDataset",
     "generate_gaussian_mixture",
     "generate_test_sample",
     "generate_test_sample_1",
